@@ -1,7 +1,7 @@
 DATASET: 'PandasetDataset'
 DATA_PATH: '../data/pandaset'
 
-POINT_CLOUD_RANGE: [-70, -40, -3, 70, 40, 1] # xmin, ymin, zmin, xmax, ymax, zmax
+POINT_CLOUD_RANGE: [-70, -70, -2.052, 70, 70, 0.348] # xmin, ymin, zmin, xmax, ymax, zmax
 
 DATA_SPLIT: {
     'train': train,
@@ -36,16 +36,16 @@ TRAINING_CATEGORIES: {
 # for training is the same as the raw dataset category
   'Car': 'Car',
   'Pickup Truck': 'Car',
-  'Medium-sized Truck': 'Truck',
-  'Semi-truck': 'Truck',
-  'Towed Object': 'Other Vehicle',
-  'Motorcycle': 'Motorcycle',
-  'Other Vehicle - Construction Vehicle': 'Other Vehicle',
-  'Other Vehicle - Uncommon': 'Other Vehicle',
-  'Other Vehicle - Pedicab': 'Other Vehicle',
-  'Emergency Vehicle': 'Other Vehicle',
-  'Bus': 'Bus',
-  'Bicycle': 'Bicycle',
+  'Medium-sized Truck': 'Car',
+  'Semi-truck': 'Car',
+  'Towed Object': 'Car',
+  'Motorcycle': 'Cyclist',
+  'Other Vehicle - Construction Vehicle': 'Car',
+  'Other Vehicle - Uncommon': 'Car',
+  'Other Vehicle - Pedicab': 'Car',
+  'Emergency Vehicle': 'Car',
+  'Bus': 'Car',
+  'Bicycle': 'Cyclist',
   'Pedestrian': 'Pedestrian',
   'Pedestrian with Object': 'Pedestrian',
   'Animals - Other': 'Animal'
@@ -64,11 +64,11 @@ DATA_AUGMENTOR:
           DB_INFO_PATH:
               - pandaset_dbinfos_train.pkl
           PREPARE: {
-             filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Bicycle:5'],
+             filter_by_min_points: ['Car:20', 'Pedestrian:20', 'Cyclist:20'],
              filter_by_difficulty: [-1],
           }
 
-          SAMPLE_GROUPS: ['Car:20','Pedestrian:15', 'Bicycle:15']
+          SAMPLE_GROUPS: ['Car:20','Pedestrian:15', 'Cyclist:15']
           NUM_POINT_FEATURES: 4
           DATABASE_WITH_FAKELIDAR: False
           REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
@@ -102,7 +102,7 @@ DATA_PROCESSOR:
       }
 
     - NAME: transform_points_to_voxels
-      VOXEL_SIZE: [0.05, 0.05, 0.1]
+      VOXEL_SIZE: [0.05, 0.05, 0.06]
       MAX_POINTS_PER_VOXEL: 5
       MAX_NUMBER_OF_VOXELS: {
         'train': 16000,
