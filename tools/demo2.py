@@ -1,6 +1,7 @@
 import argparse
 import glob
 from pathlib import Path
+
 try:
     import open3d
     from visual_utils import open3d_vis_utils as V
@@ -9,17 +10,12 @@ except:
     import mayavi.mlab as mlab
     from visual_utils import visualize_utils as V
     OPEN3D_FLAG = False
-# try:
-#     import mayavi.mlab as mlab
-#     from visual_utils import visualize_utils as V
-#     OPEN3D_FLAG = False
-# except:
-#     import open3d
-#     from visual_utils import open3d_vis_utils as V
-#     OPEN3D_FLAG = True
-    
+
 import numpy as np
 import torch
+import pandas as pd
+import pandaset as ps
+from pandaset import DataSet
 
 from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
@@ -28,7 +24,7 @@ from pcdet.utils import common_utils
 
 
 class DemoDataset(DatasetTemplate):
-    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
+    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.pkl.gz'):
         """
         Args:
             root_path:
@@ -41,7 +37,6 @@ class DemoDataset(DatasetTemplate):
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
         self.root_path = root_path
-        print(self.root_path)
         self.ext = ext
         data_file_list = glob.glob(str(root_path / f'*{self.ext}')) if self.root_path.is_dir() else [self.root_path]
 
@@ -56,19 +51,40 @@ class DemoDataset(DatasetTemplate):
             points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
-        elif self.ext == '.pcd':
-            points = pcl.load_XYZI(str(self.sample_file_list[index]))
-            points = points.to_array()
-            # maeda`s coordinates are:
-            # - x pointing to the 
-            # - y pointing to the 
-            # - z pointing 
+        elif self.ext ==".pkl.gz":
+            #def _get_lidar_points(self, info, pose):
+            # get lidar points
+            lidar_frame = pd.read_pickle(self.sample_file_list[index])
+            # get points for the required lidar(s) only
+            lidar_frame = lidar_frame[lidar_frame.d == 0]
+            world_points = lidar_frame.to_numpy()
+            # There seems to be issues with the automatic deletion of pandas datasets sometimes
+            del lidar_frame
+
+            points_loc = world_points[:, :3]
+            points_int = world_points[:, 3]
+
+        # nromalize intensity
+            points_int = points_int / 255
+            tmp_dataset = DataSet('/home/algo-4/work/OpenPCDet/data/Pandaset/')
+            tmp_seq = tmp_dataset['004']
+            tmp_seq.load()
+            pose =   tmp_seq.lidar.poses[2]
+            ego_points = ps.geometry.lidar_points_to_ego(points_loc, pose)
+            # Pandaset ego coordinates are:
+            # - x pointing to the right
+            # - y pointing to the front
+            # - z pointing up
             # Normative coordinates are:
             # - x pointing foreward
             # - y pointings to the left
             # - z pointing to the top
-        elif self.ext == '.txt':
-            points = np.loadtxt(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
+            # So a transformation is required to the match the normative coordinates
+            ego_points = ego_points[:, [1, 0, 2]] # switch x and y
+            ego_points[:, 1] = - ego_points[:, 1] # revert y axis
+
+            points = np.append(ego_points, np.expand_dims(points_int, axis=1), axis=1).astype(np.float32)
+
         else:
             raise NotImplementedError
 
@@ -88,7 +104,7 @@ def parse_config():
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
-    parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
+    parser.add_argument('--ext', type=str, default='.pkl.gz', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
 
@@ -101,12 +117,10 @@ def main():
     args, cfg = parse_config()
     logger = common_utils.create_logger()
     logger.info('-----------------Quick Demo of OpenPCDet-------------------------')
-    
     demo_dataset = DemoDataset(
         dataset_cfg=cfg.DATA_CONFIG, class_names=cfg.CLASS_NAMES, training=False,
         root_path=Path(args.data_path), ext=args.ext, logger=logger
     )
-
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
